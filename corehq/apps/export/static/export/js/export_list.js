@@ -181,7 +181,7 @@ hqDefine("export/js/export_list", [
     };
 
     var exportPanelModel = function (options) {
-        assertProperties.assert(options, ['header', 'isDailySavedExport', 'isDeid', 'isFeed', 'modelType', 'myExports', 'showOwnership', 'urls']);
+        assertProperties.assert(options, ['header', 'isDailySavedExport', 'isDeid', 'isFeed', 'isOData', 'modelType', 'myExports', 'showOwnership', 'urls']);
 
         var self = _.extend({}, options);
 
@@ -215,6 +215,7 @@ hqDefine("export/js/export_list", [
                     model_type: self.modelType,
                     is_daily_saved_export: self.isDailySavedExport ? 1 : 0,
                     is_feed: self.isFeed ? 1 : 0,
+                    is_odata: self.isOData ? 1 : 0,
                     my_exports: self.myExports ? 1 : 0,
                     page: page,
                     limit: self.itemsPerPage(),
@@ -252,7 +253,7 @@ hqDefine("export/js/export_list", [
     };
 
     var exportListModel = function (options) {
-        assertProperties.assert(options, ['headers', 'isDailySavedExport', 'isDeid', 'isFeed', 'modelType', 'urls']);
+        assertProperties.assert(options, ['headers', 'isDailySavedExport', 'isDeid', 'isFeed', 'isOData', 'modelType', 'urls']);
 
         var self = {};
 
@@ -260,6 +261,7 @@ hqDefine("export/js/export_list", [
         self.isDeid = options.isDeid;
         self.isDailySavedExport = options.isDailySavedExport;
         self.isFeed = options.isFeed;
+        self.isOData = options.isOData;
 
         assertProperties.assert(options.urls, ['commitFilters', 'getExportsPage', 'poll', 'toggleEnabled', 'update']);
         self.urls = options.urls;
