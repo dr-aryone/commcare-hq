@@ -330,6 +330,7 @@ class FormExportListHelper(ExportListHelper):
         exports = get_form_exports_by_domain(self.domain,
                                              self.permissions.has_deid_view_permissions,
                                              include_docs=False)
+        # TODO and not x['is_odata_config']]
         return [x for x in exports if not x['is_daily_saved_export']]
 
     def _edit_view(self, export):
@@ -858,7 +859,7 @@ def submit_app_data_drilldown_form(request, domain):
 
 class ODataFeedListHelper(ExportListHelper):
     allow_bulk_export = False
-    form_or_case = 'case'
+    form_or_case = 'case'  # TODO change to None to support forms
     is_deid = False
 
     @property
@@ -888,6 +889,7 @@ class ODataFeedListHelper(ExportListHelper):
         # TODO maybe link to the API or something?
         from corehq.apps.export.views.download import DownloadNewCaseExportView
         return DownloadNewCaseExportView
+        # return None  # You can't download OData feeds directly
 
 
 @method_decorator(toggles.ODATA.required_decorator(), name='dispatch')
@@ -902,4 +904,5 @@ class ODataFeedListView(BaseExportListView, ODataFeedListHelper):
     def page_context(self):
         context = super(ODataFeedListView, self).page_context
         context['is_odata'] = True
+        # TODO Copy a bunch of crap from DashboardFeedListView.page_context
         return context
