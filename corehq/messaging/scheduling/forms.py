@@ -310,32 +310,12 @@ class ContentForm(Form):
 
         raise NotImplementedError("SMS / Callback is no longer supported")
 
+    @property
+    def distiller(self):
+        return ContentFormDistiller()
+
     def distill_content(self):
-        if self.schedule_form.cleaned_data['content'] == ScheduleForm.CONTENT_SMS:
-            return SMSContent(
-                message=self.cleaned_data['message']
-            )
-        elif self.schedule_form.cleaned_data['content'] == ScheduleForm.CONTENT_EMAIL:
-            return EmailContent(
-                subject=self.cleaned_data['subject'],
-                message=self.cleaned_data['message'],
-            )
-        elif self.schedule_form.cleaned_data['content'] == ScheduleForm.CONTENT_SMS_SURVEY:
-            return SMSSurveyContent(
-                form_unique_id=self.cleaned_data['form_unique_id'],
-                expire_after=self.cleaned_data['survey_expiration_in_hours'] * 60,
-                reminder_intervals=self.cleaned_data['survey_reminder_intervals'],
-                submit_partially_completed_forms=
-                    self.schedule_form.cleaned_data['submit_partially_completed_forms'],
-                include_case_updates_in_partial_submissions=
-                    self.schedule_form.cleaned_data['include_case_updates_in_partial_submissions']
-            )
-        elif self.schedule_form.cleaned_data['content'] == ScheduleForm.CONTENT_CUSTOM_SMS:
-            return CustomContent(
-                custom_content_id=self.cleaned_data['custom_sms_content_id']
-            )
-        else:
-            raise ValueError("Unexpected value for content: '%s'" % self.schedule_form.cleaned_data['content'])
+        return self.distiller.distill(self.cleaned_data, self.schedule_form.cleaned_data)
 
     def get_layout_fields(self):
         return [
@@ -475,6 +455,35 @@ class ContentForm(Form):
         return values
 
 
+class ContentFormDistiller(object):
+    def distill(self, form_data, schedule_form_data):
+        if schedule_form_data['content'] == ScheduleForm.CONTENT_SMS:
+            return SMSContent(
+                message=form_data['message']
+            )
+        elif schedule_form_data['content'] == ScheduleForm.CONTENT_EMAIL:
+            return EmailContent(
+                subject=form_data['subject'],
+                message=form_data['message'],
+            )
+        elif schedule_form_data['content'] == ScheduleForm.CONTENT_SMS_SURVEY:
+            return SMSSurveyContent(
+                form_unique_id=form_data['form_unique_id'],
+                expire_after=form_data['survey_expiration_in_hours'] * 60,
+                reminder_intervals=form_data['survey_reminder_intervals'],
+                submit_partially_completed_forms=
+                    schedule_form_data['submit_partially_completed_forms'],
+                include_case_updates_in_partial_submissions=
+                    schedule_form_data['include_case_updates_in_partial_submissions']
+            )
+        elif schedule_form_data['content'] == ScheduleForm.CONTENT_CUSTOM_SMS:
+            return CustomContent(
+                custom_content_id=form_data['custom_sms_content_id']
+            )
+        else:
+            raise ValueError("Unexpected value for content: '%s'" % schedule_form_data['content'])
+
+
 class CustomEventForm(ContentForm):
     # Prefix to avoid name collisions; this means all input
     # names in the HTML are prefixed with "custom-event"
@@ -604,31 +613,7 @@ class CustomEventForm(ContentForm):
         return result
 
     def distill_event(self):
-        if self.schedule_form.cleaned_data_uses_alert_schedule():
-            return AlertEvent(
-                minutes_to_wait=self.cleaned_data['minutes_to_wait'],
-            )
-        else:
-            send_time_type = self.schedule_form.cleaned_data['send_time_type']
-            day = self.cleaned_data['day'] - 1
-            if send_time_type == TimedSchedule.EVENT_SPECIFIC_TIME:
-                return TimedEvent(
-                    day=day,
-                    time=self.cleaned_data['time'],
-                )
-            elif send_time_type == TimedSchedule.EVENT_RANDOM_TIME:
-                return RandomTimedEvent(
-                    day=day,
-                    time=self.cleaned_data['time'],
-                    window_length=self.cleaned_data['window_length'],
-                )
-            elif send_time_type == TimedSchedule.EVENT_CASE_PROPERTY_TIME:
-                return CasePropertyTimedEvent(
-                    day=day,
-                    case_property_name=self.cleaned_data['case_property_name'],
-                )
-            else:
-                raise ValueError("Unexpected value for send_time_type: '%s'" % send_time_type)
+        return CustomEventFormDistiller().distill(self.cleaned_data, self.schedule_form.cleaned_data)
 
     def get_layout_fields(self):
         return [
@@ -718,6 +703,42 @@ class CustomEventForm(ContentForm):
                 data_bind='with: eventAndContentViewModel',
             ),
         )
+
+
+class CustomEventFormDistiller(ContentFormDistiller):
+    def form_data_uses_alert_schedule(self, form_data):
+        return form_data.get('send_frequency', None) in (
+            ScheduleForm.SEND_IMMEDIATELY,
+            ScheduleForm.SEND_CUSTOM_IMMEDIATE
+        )
+
+    def distill_event(self, form_data, schedule_form_data):
+        if self.form_data_uses_alert_schedule(schedule_form_data):
+            return AlertEvent(
+                minutes_to_wait=form_data['minutes_to_wait'],
+            )
+        else:
+            send_time_type = schedule_form_data['send_time_type']
+            day = form_data['day'] - 1
+            if send_time_type == TimedSchedule.EVENT_SPECIFIC_TIME:
+                return TimedEvent(
+                    day=day,
+                    time=form_data['time'],
+                )
+            elif send_time_type == TimedSchedule.EVENT_RANDOM_TIME:
+                return RandomTimedEvent(
+                    day=day,
+                    time=form_data['time'],
+                    window_length=form_data['window_length'],
+                )
+            elif send_time_type == TimedSchedule.EVENT_CASE_PROPERTY_TIME:
+                return CasePropertyTimedEvent(
+                    day=day,
+                    case_property_name=form_data['case_property_name'],
+                )
+            else:
+                raise ValueError("Unexpected value for send_time_type: '%s'" % send_time_type)
+
 
 
 class BaseCustomEventFormSet(BaseFormSet):
