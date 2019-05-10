@@ -2282,85 +2282,36 @@ class ScheduleForm(Form):
 
         return value
 
+    @property
+    def distiller(self):
+        return ScheduleFormDistiller()
+
     def distill_recipients(self):
-        form_data = self.cleaned_data
-        return (
-            [(ScheduleInstance.RECIPIENT_TYPE_MOBILE_WORKER, user_id)
-             for user_id in form_data['user_recipients']] +
-            [(ScheduleInstance.RECIPIENT_TYPE_USER_GROUP, group_id)
-             for group_id in form_data['user_group_recipients']] +
-            [(ScheduleInstance.RECIPIENT_TYPE_LOCATION, location_id)
-             for location_id in form_data['user_organization_recipients']] +
-            [(ScheduleInstance.RECIPIENT_TYPE_CASE_GROUP, case_group_id)
-             for case_group_id in form_data['case_group_recipients']]
-        )
+        return self.distiller.distill_recipients(self.cleaned_data)
 
     def distill_total_iterations(self):
-        form_data = self.cleaned_data
-        if form_data['repeat'] == self.REPEAT_NO:
-            return 1
-        elif form_data['stop_type'] == self.STOP_NEVER:
-            return TimedSchedule.REPEAT_INDEFINITELY
-
-        return form_data['occurrences']
+        return self.distiller.distill_total_iterations(self.cleaned_data)
 
     def distill_repeat_every(self):
-        if self.cleaned_data['repeat'] == self.REPEAT_EVERY_N:
-            return self.cleaned_data['repeat_every']
-
-        return 1
+        return self.distiller.distill_repeat_every(self.cleaned_data)
 
     def distill_default_language_code(self):
-        value = self.cleaned_data['default_language_code']
-        if value == self.LANGUAGE_PROJECT_DEFAULT:
-            return None
-        else:
-            return value
+        return self.distiller.distill_default_language_code(self.cleaned_data)
 
     def distill_extra_scheduling_options(self):
-        form_data = self.cleaned_data
-        return {
-            'active': form_data['active'],
-            'default_language_code': self.distill_default_language_code(),
-            'include_descendant_locations': (
-                ScheduleInstance.RECIPIENT_TYPE_LOCATION in form_data['recipient_types'] and
-                form_data['include_descendant_locations']
-            ),
-            'location_type_filter': form_data['location_types'],
-            'use_utc_as_default_timezone': form_data['use_utc_as_default_timezone'],
-            'user_data_filter': self.distill_user_data_filter(),
-        }
+        return self.distiller.distill_extra_scheduling_options(self.cleaned_data)
 
     def distill_user_data_filter(self):
-        if self.cleaned_data['use_user_data_filter'] == self.NO:
-            return {}
-
-        name = self.cleaned_data['user_data_property_name']
-        value = self.cleaned_data['user_data_property_value']
-        return {name: value}
+        return self.distiller.distill_user_data_filter(self.cleaned_data)
 
     def distill_start_offset(self):
-        raise NotImplementedError()
+        return self.distiller.distill_start_offset(self.cleaned_data)
 
     def distill_start_day_of_week(self):
-        raise NotImplementedError()
+        return self.distiller.distill_start_day_of_week(self.cleaned_data)
 
     def distill_model_timed_event(self):
-        if self.cleaned_data_uses_custom_event_definitions():
-            raise ValueError("Cannot use this method with custom event definitions")
-
-        event_type = self.cleaned_data['send_time_type']
-        if event_type == TimedSchedule.EVENT_SPECIFIC_TIME:
-            return TimedEvent(
-                time=self.cleaned_data['send_time'],
-            )
-        elif event_type == TimedSchedule.EVENT_RANDOM_TIME:
-            return RandomTimedEvent(
-                time=self.cleaned_data['send_time'],
-                window_length=self.cleaned_data['window_length'],
-            )
-        else:
-            raise ValueError("Unexpected send_time_type: %s" % event_type)
+        return self.distiller.distill_model_timed_event(self.cleaned_data)
 
     def assert_alert_schedule(self, schedule):
         if not isinstance(schedule, AlertSchedule):
@@ -2548,6 +2499,91 @@ class ScheduleForm(Form):
         }[send_frequency]()
 
 
+class ScheduleFormDistiller(object):
+    def form_data_uses_custom_event_definitions(self, form_data):
+        return form_data.get('send_frequency', None) in (
+            ScheduleForm.SEND_IMMEDIATELY,
+            ScheduleForm.SEND_CUSTOM_IMMEDIATE
+        )
+
+    def distill_recipients(self, form_data):
+        return (
+            [(ScheduleInstance.RECIPIENT_TYPE_MOBILE_WORKER, user_id)
+             for user_id in form_data['user_recipients']] +
+            [(ScheduleInstance.RECIPIENT_TYPE_USER_GROUP, group_id)
+             for group_id in form_data['user_group_recipients']] +
+            [(ScheduleInstance.RECIPIENT_TYPE_LOCATION, location_id)
+             for location_id in form_data['user_organization_recipients']] +
+            [(ScheduleInstance.RECIPIENT_TYPE_CASE_GROUP, case_group_id)
+             for case_group_id in form_data['case_group_recipients']]
+        )
+
+    def distill_total_iterations(self, form_data):
+        if form_data['repeat'] == ScheduleForm.REPEAT_NO:
+            return 1
+        elif form_data['stop_type'] == ScheduleForm.STOP_NEVER:
+            return TimedSchedule.REPEAT_INDEFINITELY
+
+        return form_data['occurrences']
+
+    def distill_repeat_every(self, form_data):
+        if form_data['repeat'] == ScheduleForm.REPEAT_EVERY_N:
+            return form_data['repeat_every']
+
+        return 1
+
+    def distill_default_language_code(self, form_data):
+        value = form_data['default_language_code']
+        if value == ScheduleForm.LANGUAGE_PROJECT_DEFAULT:
+            return None
+        else:
+            return value
+
+    def distill_extra_scheduling_options(self, form_data):
+        return {
+            'active': form_data['active'],
+            'default_language_code': self.distill_default_language_code(form_data),
+            'include_descendant_locations': (
+                ScheduleInstance.RECIPIENT_TYPE_LOCATION in form_data['recipient_types'] and
+                form_data['include_descendant_locations']
+            ),
+            'location_type_filter': form_data['location_types'],
+            'use_utc_as_default_timezone': form_data['use_utc_as_default_timezone'],
+            'user_data_filter': self.distill_user_data_filter(form_data),
+        }
+
+    def distill_user_data_filter(self, form_data):
+        if form_data['use_user_data_filter'] == ScheduleForm.NO:
+            return {}
+
+        name = form_data['user_data_property_name']
+        value = form_data['user_data_property_value']
+        return {name: value}
+
+    def distill_start_offset(self, form_data):
+        raise NotImplementedError()
+
+    def distill_start_day_of_week(self, form_data):
+        raise NotImplementedError()
+
+    def distill_model_timed_event(self, form_data):
+        if self.form_data_uses_custom_event_definitions(form_data):
+            raise ValueError("Cannot use this method with custom event definitions")
+
+        event_type = form_data['send_time_type']
+        if event_type == TimedSchedule.EVENT_SPECIFIC_TIME:
+            return TimedEvent(
+                time=form_data['send_time'],
+            )
+        elif event_type == TimedSchedule.EVENT_RANDOM_TIME:
+            return RandomTimedEvent(
+                time=form_data['send_time'],
+                window_length=form_data['window_length'],
+            )
+        else:
+            raise ValueError("Unexpected send_time_type: %s" % event_type)
+
+
 class BroadcastForm(ScheduleForm):
 
     use_case = 'broadcast'
@@ -2616,14 +2652,15 @@ class BroadcastForm(ScheduleForm):
 
         return result
 
+    @property
+    def distiller(self):
+        return BroadcastFormDistiller()
+
     def distill_start_offset(self):
-        return 0
+        return self.distiller.distill_start_offset(self.cleaned_data)
 
     def distill_start_day_of_week(self):
-        if self.cleaned_data['send_frequency'] != self.SEND_WEEKLY:
-            return TimedSchedule.ANY_DAY
-
-        return self.cleaned_data['start_date'].weekday()
+        return self.distiller.distill_start_day_of_week(self.cleaned_data)
 
     def save_immediate_broadcast(self, schedule):
         form_data = self.cleaned_data
@@ -2679,6 +2716,16 @@ class BroadcastForm(ScheduleForm):
             }[send_frequency](schedule)
 
         return (broadcast, schedule)
+
+class BroadcastFormDistiller(ScheduleFormDistiller):
+    def distill_start_offset(self, form_data):
+        return 0
+
+    def distill_start_day_of_week(self, form_data):
+        if form_data['send_frequency'] != ScheduleForm.SEND_WEEKLY:
+            return TimedSchedule.ANY_DAY
+
+        return form_data['start_date'].weekday()
 
 
 class ConditionalAlertScheduleForm(ScheduleForm):
@@ -3407,100 +3454,27 @@ class ConditionalAlertScheduleForm(ScheduleForm):
 
         return value
 
+    @property
+    def distiller(self):
+        return ConditionalAlertScheduleFormDistiller()
+
     def distill_start_offset(self):
-        send_frequency = self.cleaned_data.get('send_frequency')
-        start_offset_type = self.cleaned_data.get('start_offset_type')
-        start_date_type = self.cleaned_data.get('start_date_type')
-
-        if (
-            send_frequency in (self.SEND_DAILY, self.SEND_CUSTOM_DAILY) and
-            start_date_type != self.START_DATE_SPECIFIC_DATE and
-            start_offset_type in (self.START_OFFSET_NEGATIVE, self.START_OFFSET_POSITIVE)
-        ):
-            start_offset = self.cleaned_data.get('start_offset')
-
-            if start_offset is None:
-                raise ValidationError(_("This field is required"))
-
-            if start_offset_type == self.START_OFFSET_NEGATIVE:
-                return -1 * start_offset
-            else:
-                return start_offset
-
-        return 0
+        return self.distiller.distill_start_offset(self.cleaned_data)
 
     def distill_start_day_of_week(self):
-        if self.cleaned_data['send_frequency'] != self.SEND_WEEKLY:
-            return TimedSchedule.ANY_DAY
-
-        if self.cleaned_data['start_date_type'] == self.START_DATE_SPECIFIC_DATE:
-            return self.cleaned_data['start_date'].weekday()
-
-        return self.cleaned_data['start_day_of_week']
+        return self.distiller.distill_start_day_of_week(self.cleaned_data)
 
     def distill_scheduler_module_info(self):
-        if self.cleaned_data.get('start_date_type') != self.START_DATE_FROM_VISIT_SCHEDULER:
-            return CreateScheduleInstanceActionDefinition.SchedulerModuleInfo(enabled=False)
-
-        app_id, form_unique_id = self.split_app_and_form_unique_id(
-            self.cleaned_data['visit_scheduler_app_and_form_unique_id']
-        )
-
-        return CreateScheduleInstanceActionDefinition.SchedulerModuleInfo(
-            enabled=True,
-            # The id of the primary application doc
-            app_id=app_id,
-            form_unique_id=form_unique_id,
-            # Convert to 0-based index
-            visit_number=self.cleaned_data['visit_number'] - 1,
-            window_position=self.cleaned_data['visit_window_position'],
-        )
+        return self.distiller.distill_scheduler_module_info(self.cleaned_data)
 
     def distill_recipients(self):
-        result = super(ConditionalAlertScheduleForm, self).distill_recipients()
-        recipient_types = self.cleaned_data['recipient_types']
-
-        for recipient_type_without_id in (
-            CaseScheduleInstanceMixin.RECIPIENT_TYPE_SELF,
-            CaseScheduleInstanceMixin.RECIPIENT_TYPE_CASE_OWNER,
-            CaseScheduleInstanceMixin.RECIPIENT_TYPE_LAST_SUBMITTING_USER,
-            CaseScheduleInstanceMixin.RECIPIENT_TYPE_PARENT_CASE,
-            CaseScheduleInstanceMixin.RECIPIENT_TYPE_ALL_CHILD_CASES,
-        ):
-            if recipient_type_without_id in recipient_types:
-                result.append((recipient_type_without_id, None))
-
-        if CaseScheduleInstanceMixin.RECIPIENT_TYPE_CUSTOM in recipient_types:
-            custom_recipient_id = self.cleaned_data['custom_recipient']
-            result.append((CaseScheduleInstanceMixin.RECIPIENT_TYPE_CUSTOM, custom_recipient_id))
-
-        return result
+        return self.distiller.distill_recipients(self.cleaned_data)
 
     def distill_model_timed_event(self):
-        if self.cleaned_data_uses_custom_event_definitions():
-            raise ValueError("Cannot use this method with custom event definitions")
-
-        event_type = self.cleaned_data['send_time_type']
-        if event_type == TimedSchedule.EVENT_CASE_PROPERTY_TIME:
-            return CasePropertyTimedEvent(
-                case_property_name=self.cleaned_data['send_time_case_property_name'],
-            )
-
-        return super(ConditionalAlertScheduleForm, self).distill_model_timed_event()
+        return self.distiller.distill_model_timed_event(self.cleaned_data)
 
     def distill_extra_scheduling_options(self):
-        extra_options = super(ConditionalAlertScheduleForm, self).distill_extra_scheduling_options()
-
-        if self.cleaned_data.get('capture_custom_metadata_item') == self.YES:
-            extra_options['custom_metadata'] = {
-                self.cleaned_data['custom_metadata_item_name']: self.cleaned_data['custom_metadata_item_value']
-            }
-        else:
-            extra_options['custom_metadata'] = {}
-
-        extra_options['stop_date_case_property_name'] = self.cleaned_data['stop_date_case_property_name']
-
-        return extra_options
+        return self.distiller.distill_extra_scheduling_options(self.cleaned_data)
 
     def create_rule_action(self, rule, schedule):
         fields = {
@@ -3558,6 +3532,110 @@ class ConditionalAlertScheduleForm(ScheduleForm):
         with transaction.atomic():
             schedule = self.save_schedule()
             self.save_rule_action(rule, schedule)
+
+
+class ConditionalAlertScheduleFormDistiller(ScheduleFormDistiller):
+    def split_app_and_form_unique_id(self, value):
+        return value.split('|')
+
+    def distill_start_offset(self, form_data):
+        send_frequency = form_data.get('send_frequency')
+        start_offset_type = form_data.get('start_offset_type')
+        start_date_type = form_data.get('start_date_type')
+
+        if (
+            send_frequency in (ScheduleForm.SEND_DAILY, ScheduleForm.SEND_CUSTOM_DAILY) and
+            start_date_type != ConditionalAlertScheduleForm.START_DATE_SPECIFIC_DATE and
+            start_offset_type in (
+                ConditionalAlertScheduleForm.START_OFFSET_NEGATIVE,
+                ConditionalAlertScheduleForm.START_OFFSET_POSITIVE
+            )
+        ):
+            start_offset = form_data.get('start_offset')
+
+            if start_offset is None:
+                raise ValidationError(_("This field is required"))
+
+            if start_offset_type == ConditionalAlertScheduleForm.START_OFFSET_NEGATIVE:
+                return -1 * start_offset
+            else:
+                return start_offset
+
+        return 0
+
+    def distill_start_day_of_week(self, form_data):
+        if form_data['send_frequency'] != ScheduleForm.SEND_WEEKLY:
+            return TimedSchedule.ANY_DAY
+
+        if form_data['start_date_type'] == ConditionalAlertScheduleForm.START_DATE_SPECIFIC_DATE:
+            return form_data['start_date'].weekday()
+
+        return form_data['start_day_of_week']
+
+    def distill_scheduler_module_info(self, form_data):
+        if form_data.get('start_date_type') != ConditionalAlertScheduleForm.START_DATE_FROM_VISIT_SCHEDULER:
+            return CreateScheduleInstanceActionDefinition.SchedulerModuleInfo(enabled=False)
+
+        app_id, form_unique_id = self.split_app_and_form_unique_id(
+            form_data['visit_scheduler_app_and_fmrm_unique_id']
+        )
+
+        return CreateScheduleInstanceActionDefinition.SchedulerModuleInfo(
+            enabled=True,
+            # The id of the primary application doc
+            app_id=app_id,
+            form_unique_id=form_unique_id,
+            # Convert to 0-based index
+            visit_number=form_data['visit_number'] - 1,
+            window_position=form_data['visit_window_position'],
+        )
+
+    def distill_recipients(self, form_data):
+        result = super(ConditionalAlertScheduleFormDistiller, self).distill_recipients(form_data)
+        recipient_types = form_data['recipient_types']
+
+        for recipient_type_without_id in (
+            CaseScheduleInstanceMixin.RECIPIENT_TYPE_SELF,
+            CaseScheduleInstanceMixin.RECIPIENT_TYPE_CASE_OWNER,
+            CaseScheduleInstanceMixin.RECIPIENT_TYPE_LAST_SUBMITTING_USER,
+            CaseScheduleInstanceMixin.RECIPIENT_TYPE_PARENT_CASE,
+            CaseScheduleInstanceMixin.RECIPIENT_TYPE_ALL_CHILD_CASES,
+        ):
+            if recipient_type_without_id in recipient_types:
+                result.append((recipient_type_without_id, None))
+
+        if CaseScheduleInstanceMixin.RECIPIENT_TYPE_CUSTOM in recipient_types:
+            custom_recipient_id = form_data['custom_recipient']
+            result.append((CaseScheduleInstanceMixin.RECIPIENT_TYPE_CUSTOM, custom_recipient_id))
+
+        return result
+
+    def distill_model_timed_event(self, form_data):
+        if self.form_data_uses_custom_event_definitions(form_data):
+            raise ValueError("Cannot use this method with custom event definitions")
+
+        event_type = form_data['send_time_type']
+        if event_type == TimedSchedule.EVENT_CASE_PROPERTY_TIME:
+            return CasePropertyTimedEvent(
+                case_property_name=form_data['send_time_case_property_name'],
+            )
+
+        return super(ConditionalAlertScheduleFormDistiller, self).distill_model_timed_event(form_data)
+
+    def distill_extra_scheduling_options(self, form_data):
+        extra_options = super(ConditionalAlertScheduleFormDistiller,
+            self).distill_extra_scheduling_options(form_data)
+
+        if form_data.get('capture_custom_metadata_item') == ScheduleForm.YES:
+            extra_options['custom_metadata'] = {
+                form_data['custom_metadata_item_name']: form_data['custom_metadata_item_value']
+            }
+        else:
+            extra_options['custom_metadata'] = {}
+
+        extra_options['stop_date_case_property_name'] = form_data['stop_date_case_property_name']
+
+        return extra_options
 
 
 class ConditionalAlertForm(Form):
