@@ -343,6 +343,77 @@ class TimedSchedule(Schedule):
         return schedule
 
     @classmethod
+    def save_weekly_schedule(cls, domain, schedule_data, content_data,
+                             schedule_distiller, content_distiller, initial_schedule=None):
+        repeat_every = schedule_distiller.distill_repeat_every(schedule_data)
+        total_iterations = schedule_distiller.distill_total_iterations(schedule_data)
+        content = content_distiller.distill(content_data, schedule_data)
+        extra_scheduling_options = schedule_distiller.distill_extra_scheduling_options(schedule_data)
+
+        if initial_schedule:
+            schedule = initial_schedule
+            TimedSchedule.assert_is(schedule)
+            schedule.set_simple_weekly_schedule(
+                schedule_distiller.distill_model_timed_event(schedule_data),
+                content,
+                schedule_data['weekdays'],
+                schedule_distiller.distill_start_day_of_week(schedule_data),
+                total_iterations=total_iterations,
+                extra_options=extra_scheduling_options,
+                repeat_every=repeat_every,
+            )
+        else:
+            schedule = TimedSchedule.create_simple_weekly_schedule(
+                domain,
+                schedule_distiller.distill_model_timed_event(schedule_data),
+                content,
+                schedule_data['weekdays'],
+                schedule_distiller.distill_start_day_of_week(schedule_data),
+                total_iterations=total_iterations,
+                extra_options=extra_scheduling_options,
+                repeat_every=repeat_every,
+            )
+
+        return schedule
+
+    @classmethod
+    def save_monthly_schedule(cls, domain, schedule_data, content_data,
+                              schedule_distiller, content_distiller, initial_schedule=None):
+        repeat_every = schedule_distiller.distill_repeat_every(schedule_data)
+        total_iterations = schedule_distiller.distill_total_iterations(schedule_data)
+        content = content_distiller.distill(content_data, schedule_data)
+        extra_scheduling_options = schedule_distiller.distill_extra_scheduling_options(schedule_data)
+
+        positive_days = [day for day in schedule_data['days_of_month'] if day > 0]
+        negative_days = [day for day in schedule_data['days_of_month'] if day < 0]
+        sorted_days_of_month = sorted(positive_days) + sorted(negative_days)
+
+        if initial_schedule:
+            schedule = initial_schedule
+            TimedSchedule.assert_is(schedule)
+            schedule.set_simple_monthly_schedule(
+                schedule_distiller.distill_model_timed_event(schedule_data),
+                sorted_days_of_month,
+                content,
+                total_iterations=total_iterations,
+                extra_options=extra_scheduling_options,
+                repeat_every=repeat_every,
+            )
+        else:
+            schedule = TimedSchedule.create_simple_monthly_schedule(
+                domain,
+                schedule_distiller.distill_model_timed_event(schedule_data),
+                sorted_days_of_month,
+                content,
+                total_iterations=total_iterations,
+                extra_options=extra_scheduling_options,
+                repeat_every=repeat_every,
+            )
+
+        return schedule
+
+
+    @classmethod
     def create_simple_daily_schedule(cls, domain, model_event, content, total_iterations=REPEAT_INDEFINITELY,
             start_offset=0, start_day_of_week=ANY_DAY, extra_options=None, repeat_every=1):
         schedule = cls(domain=domain)

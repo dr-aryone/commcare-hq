@@ -2313,74 +2313,6 @@ class ScheduleForm(Form):
     def distill_model_timed_event(self):
         return self.distiller.distill_model_timed_event(self.cleaned_data)
 
-    def save_weekly_schedule(self):
-        form_data = self.cleaned_data
-        repeat_every = self.distill_repeat_every()
-        total_iterations = self.distill_total_iterations()
-        content = self.standalone_content_form.distill_content()
-        extra_scheduling_options = self.distill_extra_scheduling_options()
-
-        if self.initial_schedule:
-            schedule = self.initial_schedule
-            TimedSchedule.assert_is(schedule)
-            schedule.set_simple_weekly_schedule(
-                self.distill_model_timed_event(),
-                content,
-                form_data['weekdays'],
-                self.distill_start_day_of_week(),
-                total_iterations=total_iterations,
-                extra_options=extra_scheduling_options,
-                repeat_every=repeat_every,
-            )
-        else:
-            schedule = TimedSchedule.create_simple_weekly_schedule(
-                self.domain,
-                self.distill_model_timed_event(),
-                content,
-                form_data['weekdays'],
-                self.distill_start_day_of_week(),
-                total_iterations=total_iterations,
-                extra_options=extra_scheduling_options,
-                repeat_every=repeat_every,
-            )
-
-        return schedule
-
-    def save_monthly_schedule(self):
-        form_data = self.cleaned_data
-        repeat_every = self.distill_repeat_every()
-        total_iterations = self.distill_total_iterations()
-        content = self.standalone_content_form.distill_content()
-        extra_scheduling_options = self.distill_extra_scheduling_options()
-
-        positive_days = [day for day in form_data['days_of_month'] if day > 0]
-        negative_days = [day for day in form_data['days_of_month'] if day < 0]
-        sorted_days_of_month = sorted(positive_days) + sorted(negative_days)
-
-        if self.initial_schedule:
-            schedule = self.initial_schedule
-            TimedSchedule.assert_is(schedule)
-            schedule.set_simple_monthly_schedule(
-                self.distill_model_timed_event(),
-                sorted_days_of_month,
-                content,
-                total_iterations=total_iterations,
-                extra_options=extra_scheduling_options,
-                repeat_every=repeat_every,
-            )
-        else:
-            schedule = TimedSchedule.create_simple_monthly_schedule(
-                self.domain,
-                self.distill_model_timed_event(),
-                sorted_days_of_month,
-                content,
-                total_iterations=total_iterations,
-                extra_options=extra_scheduling_options,
-                repeat_every=repeat_every,
-            )
-
-        return schedule
-
     def save_custom_daily_schedule(self):
         event_and_content_objects = [
             (form.distill_event(), form.distill_content())
@@ -2437,28 +2369,23 @@ class ScheduleForm(Form):
 
     def save_schedule(self):
         send_frequency = self.cleaned_data['send_frequency']
-        if send_frequency == self.SEND_IMMEDIATELY:
-            return AlertSchedule.save_immediate_schedule(
+        if send_frequency in (self.SEND_IMMEDIATELY, self.SEND_DAILY, self.SEND_WEEKLY, self.SEND_MONTHLY):
+            args = [
                 self.domain,
                 self.cleaned_data,
                 self.standalone_content_form.cleaned_data,
                 self.distiller,
                 self.standalone_content_form.distiller,
-                self.initial_schedule
-            )
-        if send_frequency == self.SEND_DAILY:
-            return TimedSchedule.save_daily_schedule(
-                self.domain,
-                self.cleaned_data,
-                self.standalone_content_form.cleaned_data,
-                self.distiller,
-                self.standalone_content_form.distiller,
-                self.initial_schedule
-            )
+                self.initial_schedule,
+            ]
+            return {
+                self.SEND_IMMEDIATELY: AlertSchedule.save_immediate_schedule,
+                self.SEND_DAILY: TimedSchedule.save_daily_schedule,
+                self.SEND_WEEKLY: TimedSchedule.save_weekly_schedule,
+                self.SEND_MONTHLY: TimedSchedule.save_monthly_schedule,
+            }[send_frequency](*args)
 
         return {
-            self.SEND_WEEKLY: self.save_weekly_schedule,
-            self.SEND_MONTHLY: self.save_monthly_schedule,
             self.SEND_CUSTOM_DAILY: self.save_custom_daily_schedule,
             self.SEND_CUSTOM_IMMEDIATE: self.save_custom_immediate_schedule,
         }[send_frequency]()
