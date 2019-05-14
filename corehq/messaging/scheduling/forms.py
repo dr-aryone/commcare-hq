@@ -2313,20 +2313,6 @@ class ScheduleForm(Form):
     def distill_model_timed_event(self):
         return self.distiller.distill_model_timed_event(self.cleaned_data)
 
-    def save_immediate_schedule(self):  # domain, content, extra_scheduling_options
-        content = self.standalone_content_form.distill_content()
-        extra_scheduling_options = self.distill_extra_scheduling_options()
-
-        if self.initial_schedule:
-            schedule = self.initial_schedule
-            AlertSchedule.assert_is(schedule)
-            schedule.set_simple_alert(content, extra_options=extra_scheduling_options)
-        else:
-            schedule = AlertSchedule.create_simple_alert(self.domain, content,
-                extra_options=extra_scheduling_options)
-
-        return schedule
-
     def save_daily_schedule(self):
         repeat_every = self.distill_repeat_every()
         total_iterations = self.distill_total_iterations()
@@ -2481,8 +2467,17 @@ class ScheduleForm(Form):
 
     def save_schedule(self):
         send_frequency = self.cleaned_data['send_frequency']
+        if send_frequency == self.SEND_IMMEDIATELY:
+            return AlertSchedule.save_immediate_schedule(
+                self.domain,
+                self.cleaned_data,
+                self.standalone_content_form.cleaned_data,
+                self.distiller,
+                self.standalone_content_form.distiller,
+                self.initial_schedule
+            )
+
         return {
-            self.SEND_IMMEDIATELY: self.save_immediate_schedule,
             self.SEND_DAILY: self.save_daily_schedule,
             self.SEND_WEEKLY: self.save_weekly_schedule,
             self.SEND_MONTHLY: self.save_monthly_schedule,

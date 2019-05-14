@@ -71,6 +71,21 @@ class AlertSchedule(Schedule):
         schedule.set_custom_alert(event_and_content_objects, extra_options=extra_options)
         return schedule
 
+    @classmethod
+    def save_immediate_schedule(cls, domain, schedule_data, content_data,
+                                schedule_distiller, content_distiller, initial_schedule=None):
+        content = content_distiller.distill(content_data, schedule_data)
+        extra_scheduling_options = schedule_distiller.distill_extra_scheduling_options(schedule_data)
+
+        if initial_schedule:
+            schedule = initial_schedule
+            AlertSchedule.assert_is(schedule)
+            schedule.set_simple_alert(content, extra_options=extra_scheduling_options)
+        else:
+            schedule = AlertSchedule.create_simple_alert(domain, content, extra_options=extra_scheduling_options)
+
+        return schedule
+
     def set_custom_alert(self, event_and_content_objects, extra_options=None):
         if len(event_and_content_objects) == 0:
             raise ValueError("Expected at least one (event, content) tuple")
