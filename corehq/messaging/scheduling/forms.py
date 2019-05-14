@@ -2313,36 +2313,6 @@ class ScheduleForm(Form):
     def distill_model_timed_event(self):
         return self.distiller.distill_model_timed_event(self.cleaned_data)
 
-    def save_daily_schedule(self):
-        repeat_every = self.distill_repeat_every()
-        total_iterations = self.distill_total_iterations()
-        content = self.standalone_content_form.distill_content()
-        extra_scheduling_options = self.distill_extra_scheduling_options()
-
-        if self.initial_schedule:
-            schedule = self.initial_schedule
-            TimedSchedule.assert_is(schedule)
-            schedule.set_simple_daily_schedule(
-                self.distill_model_timed_event(),
-                content,
-                total_iterations=total_iterations,
-                start_offset=self.distill_start_offset(),
-                extra_options=extra_scheduling_options,
-                repeat_every=repeat_every,
-            )
-        else:
-            schedule = TimedSchedule.create_simple_daily_schedule(
-                self.domain,
-                self.distill_model_timed_event(),
-                content,
-                total_iterations=total_iterations,
-                start_offset=self.distill_start_offset(),
-                extra_options=extra_scheduling_options,
-                repeat_every=repeat_every,
-            )
-
-        return schedule
-
     def save_weekly_schedule(self):
         form_data = self.cleaned_data
         repeat_every = self.distill_repeat_every()
@@ -2476,9 +2446,17 @@ class ScheduleForm(Form):
                 self.standalone_content_form.distiller,
                 self.initial_schedule
             )
+        if send_frequency == self.SEND_DAILY:
+            return TimedSchedule.save_daily_schedule(
+                self.domain,
+                self.cleaned_data,
+                self.standalone_content_form.cleaned_data,
+                self.distiller,
+                self.standalone_content_form.distiller,
+                self.initial_schedule
+            )
 
         return {
-            self.SEND_DAILY: self.save_daily_schedule,
             self.SEND_WEEKLY: self.save_weekly_schedule,
             self.SEND_MONTHLY: self.save_monthly_schedule,
             self.SEND_CUSTOM_DAILY: self.save_custom_daily_schedule,

@@ -311,6 +311,38 @@ class TimedSchedule(Schedule):
             raise ValueError("Expected positive value, got %s" % repeat_every)
 
     @classmethod
+    def save_daily_schedule(cls, domain, schedule_data, content_data,
+                            schedule_distiller, content_distiller, initial_schedule=None):
+        repeat_every = schedule_distiller.distill_repeat_every(schedule_data)
+        total_iterations = schedule_distiller.distill_total_iterations(schedule_data)
+        content = content_distiller.distill(content_data, schedule_data)
+        extra_scheduling_options = schedule_distiller.distill_extra_scheduling_options(schedule_data)
+
+        if initial_schedule:
+            schedule = initial_schedule
+            TimedSchedule.assert_is(schedule)
+            schedule.set_simple_daily_schedule(
+                schedule_distiller.distill_model_timed_event(schedule_data),
+                content,
+                total_iterations=total_iterations,
+                start_offset=schedule_distiller.distill_start_offset(schedule_data),
+                extra_options=extra_scheduling_options,
+                repeat_every=repeat_every,
+            )
+        else:
+            schedule = TimedSchedule.create_simple_daily_schedule(
+                domain,
+                schedule_distiller.distill_model_timed_event(schedule_data),
+                content,
+                total_iterations=total_iterations,
+                start_offset=schedule_distiller.distill_start_offset(schedule_data),
+                extra_options=extra_scheduling_options,
+                repeat_every=repeat_every,
+            )
+
+        return schedule
+
+    @classmethod
     def create_simple_daily_schedule(cls, domain, model_event, content, total_iterations=REPEAT_INDEFINITELY,
             start_offset=0, start_day_of_week=ANY_DAY, extra_options=None, repeat_every=1):
         schedule = cls(domain=domain)
