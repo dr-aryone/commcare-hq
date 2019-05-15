@@ -9,6 +9,7 @@ from corehq.messaging.scheduling.forms import (
     ContentForm,
     ConditionalAlertCriteriaForm,
     ConditionalAlertScheduleForm,
+    save_schedule,
 )
 from corehq.messaging.scheduling.models.content import SMSContent
 from corehq import toggles
@@ -132,11 +133,18 @@ class ConditionalAlertUploader(object):
             self.can_use_inbound_sms,
             rule,
             criteria_form,
-            {'content-message': message},
+            {'message': message},
             is_system_admin=self.is_system_admin,
         )
-        # TODO: can't save form outside of form workflow
-        #schedule_form.save_schedule()
+        initial_schedule = schedule_form.compute_initial()
+        if schedule_form.is_valid():
+            save_schedule(self.domain, initial_schedule['send_frequency'],
+                          schedule_form.cleaned_data, {'message': message},
+                          schedule_form.distiller, schedule_form.standalone_content_form.distiller,
+                          initial_schedule=initial_schedule)
+        else:
+            # TODO: pass back an error
+            pass
 
 
 class TranslatedConditionalAlertUploader(ConditionalAlertUploader):

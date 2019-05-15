@@ -1163,7 +1163,7 @@ class ScheduleForm(Form):
         # Don't let the result of one short-circuit the expression and prevent calling the others.
 
         schedule_form_is_valid = super(ScheduleForm, self).is_valid()
-        custom_event_formset_is_valid = self.custom_event_formset.is_valid()
+        custom_event_formset_is_valid = True # TODO: self.custom_event_formset.is_valid()
         standalone_content_form_is_valid = self.standalone_content_form.is_valid()
 
         if self.cleaned_data_uses_custom_event_definitions():
@@ -2368,27 +2368,48 @@ class ScheduleForm(Form):
         return schedule
 
     def save_schedule(self):
-        send_frequency = self.cleaned_data['send_frequency']
-        if send_frequency in (self.SEND_IMMEDIATELY, self.SEND_DAILY, self.SEND_WEEKLY, self.SEND_MONTHLY):
-            args = [
-                self.domain,
-                self.cleaned_data,
-                self.standalone_content_form.cleaned_data,
-                self.distiller,
-                self.standalone_content_form.distiller,
-                self.initial_schedule,
-            ]
-            return {
-                self.SEND_IMMEDIATELY: AlertSchedule.save_immediate_schedule,
-                self.SEND_DAILY: TimedSchedule.save_daily_schedule,
-                self.SEND_WEEKLY: TimedSchedule.save_weekly_schedule,
-                self.SEND_MONTHLY: TimedSchedule.save_monthly_schedule,
-            }[send_frequency](*args)
+        return save_schedule(
+            self.domain,
+            self.cleaned_data['send_frequency'],
+            self.cleaned_data,
+            self.standalone_content_form.cleaned_data,
+            self.distiller,
+            self.standalone_content_form.distiller,
+            self.initial_schedule,
+        )
 
+
+def save_schedule(domain, send_frequency, schedule_data, content_data,
+                  schedule_distiller, content_distiller, initial_schedule=None):
+    if send_frequency in (
+        ScheduleForm.SEND_IMMEDIATELY,
+        ScheduleForm.SEND_DAILY,
+        ScheduleForm.SEND_WEEKLY,
+        ScheduleForm.SEND_MONTHLY
+    ):
+        args = [
+            domain,
+            schedule_data,
+            content_data,
+            schedule_distiller,
+            content_distiller,
+            initial_schedule,
+        ]
         return {
-            self.SEND_CUSTOM_DAILY: self.save_custom_daily_schedule,
-            self.SEND_CUSTOM_IMMEDIATE: self.save_custom_immediate_schedule,
-        }[send_frequency]()
+            ScheduleForm.SEND_IMMEDIATELY: AlertSchedule.save_immediate_schedule,
+            ScheduleForm.SEND_DAILY: TimedSchedule.save_daily_schedule,
+            ScheduleForm.SEND_WEEKLY: TimedSchedule.save_weekly_schedule,
+            ScheduleForm.SEND_MONTHLY: TimedSchedule.save_monthly_schedule,
+        }[send_frequency](*args)
+
+    # TODO
+    '''
+    return {
+        self.SEND_CUSTOM_DAILY: self.save_custom_daily_schedule,
+        self.SEND_CUSTOM_IMMEDIATE: self.save_custom_immediate_schedule,
+    }[send_frequency]()
+    '''
+
 
 
 class ScheduleFormDistiller(object):
